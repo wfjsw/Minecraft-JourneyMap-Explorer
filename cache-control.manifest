@@ -1,0 +1,3 @@
+config.json no-cache, must-revalidate
+tiles must-revalidate
+markers must-revalidate

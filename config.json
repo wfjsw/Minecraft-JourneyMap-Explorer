@@ -1,0 +1,16 @@
+{
+    "title": "",
+    "tiles_server": "",
+    "marker_server": "",
+    "boundary": [
+        [-5000, -5000],
+        [5000, 5000]
+    ],
+    "base_maps": {
+        "日间": "day", 
+        "夜间": "night",
+        "等高线": "topo"
+    },
+    "default_base_map": "日间",
+    "attribution": "Nothing yet."
+}
