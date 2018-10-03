@@ -42,7 +42,7 @@ function generateMarkerListHTML(markers) {
 }
 
 window.onload = async function () {
-    let config = await fetchJSON('../config.json?t=' + Date.now())
+    let config = await fetchJSON('./config.json')  // Make sure we have cache-control: no-cache server side.
     let boundary = L.latLngBounds(L.latLng(config.boundary[0][0], config.boundary[0][1]), L.latLng(config.boundary[1][0], config.boundary[1][1]))
 
     window.document.title = config.title
@@ -96,7 +96,7 @@ window.onload = async function () {
     })
 
     // Fetch markers
-    let raw_marker_data = await fetchJSON(`${config.marker_server}getMarkers`)
+    let raw_marker_data = await fetchJSON(`${config.marker_server}`) // Make sure we have cache-control: no-cache server side.
     // Marker Data: {what_category: {icon: '', markers: [{x, z, name, description}]}}
     let overlays = {}
     let markers_list = {}

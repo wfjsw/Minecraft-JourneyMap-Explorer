@@ -16,7 +16,8 @@ L.Control.Coordinates = L.Control.extend({
 		latitudeText: 'lat.',
 		longitudeText: 'lon.',
 		promptText: 'Press Ctrl+C to copy coordinates',
-		precision: 4
+		precision: 4,
+		unitPerTileLine: 512
 	},
 
 	initialize: function (options) {
@@ -47,13 +48,14 @@ L.Control.Coordinates = L.Control.extend({
 			window.prompt(this.options.promptText, latCoordinate + ', ' + lngCoordinate);
 		}, this);
 		*/
-		
+
 		return container;
 	},
 
 	_addText: function (container, context) {
-		this._lat = L.DomUtil.create('span', 'leaflet-control-coordinates-lat', container),
-			this._lng = L.DomUtil.create('span', 'leaflet-control-coordinates-lng', container);
+		this._lat = L.DomUtil.create('span', 'leaflet-control-coordinates-lat', container);
+		this._lng = L.DomUtil.create('span', 'leaflet-control-coordinates-lng', container);
+		this._tile = L.DomUtil.create('span', 'leaflet-control-coordinates-tile', container);
 
 		return container;
 	},
@@ -66,6 +68,7 @@ L.Control.Coordinates = L.Control.extend({
 		if (obj.latlng) {
 			L.DomUtil.get(this._lat).innerHTML = '<strong>' + this.options.latitudeText + ':</strong> ' + obj.latlng.lat.toFixed(this.options.precision).toString();
 			L.DomUtil.get(this._lng).innerHTML = '<strong>' + this.options.longitudeText + ':</strong> ' + obj.latlng.lng.toFixed(this.options.precision).toString();
+			L.DomUtil.get(this._tile).innerHTML = '<strong>tile: </strong> ' + Math.floor(obj.latlng.lat / this.options.unitPerTileLine) + ',' + Math.floor(obj.latlng.lng / this.options.unitPerTileLine);
 		}
 	}
 });

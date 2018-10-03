@@ -23,3 +23,11 @@
 .marker-list-marker {
     font-size: 1.3em;
 }
+
+.map-marker-title {
+    font-size: larger;
+}
+
+.map-marker-description {
+    max-width: 150px;
+}
