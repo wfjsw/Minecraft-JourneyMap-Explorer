@@ -1,15 +1,21 @@
 
-async function fetchJSON(url) {
-    try {
+function fetchJSON(url) {
+    return new Promise((rs, rj) => {
         let xmlhttp = new XMLHttpRequest();
-        xmlhttp.open('GET', url, false);
+        xmlhttp.open('GET', url, true);
+        xmlhttp.onload = function () {
+            try {
+                rs(JSON.parse(this.responseText))
+            } catch (e) {
+                rj(e)
+            }
+        }
+        xmlhttp.onerror = function (e) {
+            rj(e)
+        }
         xmlhttp.send();
-        let txt = xmlhttp.responseText;
-        return JSON.parse(txt);
-    } catch (e) {
-        console.error(e);
-        return null;
-    }
+        return xmlhttp
+    })
 }
 
 function generateMarkerPopupHTML(coord, name, description = "") {
@@ -77,7 +83,8 @@ window.onload = async function () {
             maxZoom: config.max_zoom,
             minZoom: config.min_zoom,
             attribution: config.attribution,
-            tileSize: 512
+            tileSize: 512,
+            bounds: boundary
         })
     }
 
@@ -130,6 +137,27 @@ window.onload = async function () {
         map.flyTo(loc, 2)
         markers_list[name].openPopup()
         if (slide_menu) slide_menu.close()
+    }
+
+    // Fetch geojson if exist 
+
+    if (config.geojson) {
+        for (let gj of Object.keys(config.geojson)) {
+            let source = await fetchJSON(config.geojson[gj].source)
+            let options = {}
+            options.coordsToLatLng = coords => L.latLng(coords[0], coords[1])
+            if (config.geojson[gj].style) {
+                options.style = feature => config.geojson[gj].style
+            }
+            if (config.geojson[gj].attribution) {
+                options.attribution = config.geojson[gj].attribution
+            }
+            let layer = L.geoJSON(source, options)
+            if (config.geojson[gj].added_by_default) {
+                layer.addTo(map)
+            }
+            overlays[gj] = layer
+        }
     }
 
     // Init layers control
