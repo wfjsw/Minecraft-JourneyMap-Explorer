@@ -12,5 +12,9 @@
         "等高线": "topo"
     },
     "default_base_map": "日间",
-    "attribution": "Nothing yet."
+    "attribution": "Nothing yet.",
+    "max_zoom": 0,
+    "min_zoom": 0,
+    "geojson": {},
+    "use_webp_tile": true
 }

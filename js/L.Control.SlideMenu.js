@@ -77,6 +77,8 @@ L.Control.SlideMenu = L.Control.extend({
             }
         }
 
+
+        /*
         var closeButton = L.DomUtil.create('button', 'leaflet-menu-close-button fa', this._menu);
 
         if (this._isHorizontal) {
@@ -99,6 +101,7 @@ L.Control.SlideMenu = L.Control.extend({
                 L.DomUtil.addClass(closeButton, 'fa-chevron-down');
             }
         }
+        */
 
         this._contents = L.DomUtil.create('div', 'leaflet-menu-contents', this._menu);
         this._contents.innerHTML = this._innerHTML;
@@ -120,11 +123,11 @@ L.Control.SlideMenu = L.Control.extend({
                 // Open
                 this.open()
             }, this)
-            .on(closeButton, 'click', L.DomEvent.stopPropagation)
-            .on(closeButton, 'click', function () {
-                // Close
-                this.close()
-            }, this);
+            //.on(closeButton, 'click', L.DomEvent.stopPropagation)
+            //.on(closeButton, 'click', function () {
+            //    // Close
+            //    this.close()
+            //}, this);
         L.DomEvent.on(this._menu, 'mouseover', function () {
             map.scrollWheelZoom.disable();
         });

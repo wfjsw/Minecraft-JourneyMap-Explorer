@@ -3,6 +3,7 @@
 L.MinecraftTileLayer = L.TileLayer.extend({
     options: {
         type: 'png',
+        useWebpIfAvailable: true,
         style: 'day',
         maxNativeZoom: 0,
         minNativeZoom: 0
@@ -12,8 +13,10 @@ L.MinecraftTileLayer = L.TileLayer.extend({
         if ((typeof url) === 'undefined') throw new Error('Url not set.');
 
         options = L.Util.setOptions(this, options);
+        
+        let isWebpAvailable = document.createElement('canvas').toDataURL('image/webp').indexOf('data:image/webp') == 0
 
-        var path = `${options.style}/{x},{y}.${options.type}`;
+        var path = `${options.style}/{x},{y}.${options.useWebpIfAvailable && isWebpAvailable ? 'webp': options.type}`;
 
         L.TileLayer.prototype.initialize.call(this, url + path, options);
     },

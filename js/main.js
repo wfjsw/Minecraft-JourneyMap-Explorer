@@ -84,7 +84,8 @@ window.onload = async function () {
             minZoom: config.min_zoom,
             attribution: config.attribution,
             tileSize: 512,
-            bounds: boundary
+            bounds: boundary,
+            useWebpIfAvailable: config.use_webp_tile
         })
     }
 
