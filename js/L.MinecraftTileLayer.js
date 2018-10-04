@@ -1,22 +1,40 @@
 // This TileLayer load JourneyMap tiles as a tile source.
 
+function fetchJSONSync(url) {
+    try {
+        let xmlhttp = new XMLHttpRequest();
+        xmlhttp.open('GET', url, false);
+        xmlhttp.send();
+        let txt = xmlhttp.responseText;
+        return JSON.parse(txt);
+    } catch (e) {
+        console.error(e);
+        return null;
+    }
+}
+
 L.MinecraftTileLayer = L.TileLayer.extend({
     options: {
         type: 'png',
         useWebpIfAvailable: true,
         style: 'day',
         maxNativeZoom: 0,
-        minNativeZoom: 0
+        minNativeZoom: 0,
+        meta: {}
     },
     
     initialize: function (url, options) {
         if ((typeof url) === 'undefined') throw new Error('Url not set.');
 
+        this._baseurl = url
+
         options = L.Util.setOptions(this, options);
         
         let isWebpAvailable = document.createElement('canvas').toDataURL('image/webp').indexOf('data:image/webp') == 0
 
-        var path = `${options.style}/{x},{y}.${options.useWebpIfAvailable && isWebpAvailable ? 'webp': options.type}`;
+        var path = `/${options.style}/{x},{y}.${options.useWebpIfAvailable && isWebpAvailable ? 'webp' : options.type}`;
+
+        this._ismetafetched = false
 
         L.TileLayer.prototype.initialize.call(this, url + path, options);
     },
@@ -24,6 +42,15 @@ L.MinecraftTileLayer = L.TileLayer.extend({
 	_getZoomForUrl: function () {
         // JourneyMap tiles doesn't have different tiles for zooming.
         return 0;
+    },
+
+    _getTileLastUpdatedTime: function (x, y) {
+        if (this.options.meta) {
+            if (this.options.meta[`${this.options.style}/${x},${y}`]) {
+                return this.options.meta[`${this.options.style}/${x},${y}`].t
+            }
+        }
+        return false
     },
 
     // @method createTile(coords: Object, done?: Function): HTMLElement
@@ -71,14 +98,16 @@ L.MinecraftTileLayer = L.TileLayer.extend({
             s: this._getSubdomain(coords),
             x: coords.x,
             y: coords.y,
-            z: this._getZoomForUrl()
+            z: this._getZoomForUrl(),
         };
         if (this._map && !this._map.options.crs.infinite) {
             var invertedY = this._globalTileRange.max.y - coords.y;
             data['y'] = invertedY;
         }
 
-        return L.Util.template(this._url, L.Util.extend(data, this.options));
+        let t = this._getTileLastUpdatedTime(coords.x, coords.y)
+
+        return L.Util.template(this._url, L.Util.extend(data, this.options)) + (t ? `?t=${t}` : '');
     }
 
 })
