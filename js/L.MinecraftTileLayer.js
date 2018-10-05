@@ -79,8 +79,6 @@ L.MinecraftTileLayer = L.TileLayer.extend({
 		*/
         tile.setAttribute('role', 'presentation');
 
-        tile.style.imageRendering = 'pixelated'; // Key change
-
         tile.src = this.getTileUrl(coords);
 
         return tile;

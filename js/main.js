@@ -190,7 +190,11 @@ window.initMaps = async function () {
     if (location.hash.match(/^#-{0,1}[0-9]+,-{0,1}[0-9]+,-{0,1}[0-9]+$/)) {
         let [lat, lng, zoom] = location.hash.slice(1).split(',')
         map.setView(L.latLng(lat, lng), parseInt(zoom) / 4)
-        let popup = L.popup().setLatLng(L.latLng(lat, lng)).setContent(`(${lat},${lng})`).openOn(map)
+        let popup = L.popup().setLatLng(L.latLng(lat, lng)).setContent(`<a href=${location.href}>(${lat},${lng})</a>`).openOn(map)
+    } else if (this.location.hash.match(/^#-{0,1}[0-9]+,-{0,1}[0-9]+$/)) {
+        let [lat, lng] = location.hash.slice(1).split(',')
+        map.setView(L.latLng(lat, lng), 1)
+        let popup = L.popup().setLatLng(L.latLng(lat, lng)).setContent(`<a href=${location.href}>(${lat},${lng})</a>`).openOn(map)
     }
 
     window.onhashchange = (ev) => {
@@ -205,7 +209,8 @@ window.initMaps = async function () {
         lng = Math.floor(lng)
 
         let zoom = map.getZoom() * 4
-        let popup = L.popup().setLatLng(e.latlng).setContent(`(${lat},${lng})`).openOn(map)
+        let jumpuri = location.href.replace(/#.+/, '') + `#${lat},${lng},${zoom}`
+        let popup = L.popup().setLatLng(e.latlng).setContent(`<a href="${jumpuri}">(${lat},${lng})</a>`).openOn(map)
         if (history.pushState) {
             history.pushState(null, null, `#${lat},${lng},${zoom}`);
         }

@@ -32,6 +32,13 @@
     max-width: 150px;
 }
 
+.leaflet-tile {
+    image-rendering: pixelated; /* Chrome */
+    image-rendering: -moz-crisp-edges; /* Firefox */
+    image-rendering: optimizeSpeed; /* deprecated */
+    -ms-interpolation-mode: nearest-neighbor; /* IE */
+}
+
 body {
     padding: 0;
     margin: 0;
