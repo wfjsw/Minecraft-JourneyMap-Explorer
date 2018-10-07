@@ -32,11 +32,23 @@
     max-width: 150px;
 }
 
+.mouse-coord-tip {
+    pointer-events: auto;
+}
+
+.popup-coord-tip {
+    font-size: larger;
+}
+
 .leaflet-tile {
     image-rendering: pixelated; /* Chrome */
     image-rendering: -moz-crisp-edges; /* Firefox */
     image-rendering: optimizeSpeed; /* deprecated */
     -ms-interpolation-mode: nearest-neighbor; /* IE */
+}
+
+.leaflet-container {
+    background: #000;
 }
 
 body {

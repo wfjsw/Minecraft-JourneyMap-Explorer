@@ -1,21 +1,29 @@
 
-function fetchJSON(url) {
-    return new Promise((rs, rj) => {
-        let xmlhttp = new XMLHttpRequest();
-        xmlhttp.open('GET', url, true);
-        xmlhttp.onload = function () {
-            try {
-                rs(JSON.parse(this.responseText))
-            } catch (e) {
+async function fetchJSON(url) {
+    if ('fetch' in window) {
+        let data = await fetch(url)
+        let json = await data.json()
+        return json
+    } else {
+        // Pretty old browser
+        return new Promise((rs, rj) => {
+            let xmlhttp = new XMLHttpRequest();
+            xmlhttp.open('GET', url, true);
+            xmlhttp.onload = function () {
+                try {
+                    rs(JSON.parse(this.responseText))
+                } catch (e) {
+                    rj(e)
+                }
+            }
+            xmlhttp.onerror = function (e) {
                 rj(e)
             }
-        }
-        xmlhttp.onerror = function (e) {
-            rj(e)
-        }
-        xmlhttp.send();
-        return xmlhttp
-    })
+            xmlhttp.send();
+            return xmlhttp
+        })
+    }
+
 }
 
 function generateMarkerPopupHTML(coord, name, description = "") {
@@ -47,20 +55,49 @@ function generateMarkerListHTML(markers) {
     return html
 }
 
+async function extractMarkerIcons(marker_data) {
+    async function fetchMarker(url) {
+        let json = await fetchJSON(url)
+        return { url: url, data: L.icon(json) }
+    }
+    let icons = new Map()
+    for (let cat in marker_data) {
+        for (let m of marker_data[cat]['markers']) {
+            if (m.icon) icons.set(m.icon, m.icon)
+        }
+        if (marker_data[cat].icon) icons.set(marker_data[cat].icon, marker_data[cat].icon)
+    }
+    let data_raw = await Promise.all([...icons.values()].map(url => fetchMarker(url)))
+    for (let m of data_raw) {
+        icons.set(m.url, m.data)
+    }
+    return icons
+}
+
 async function loadBaseMap(config, map, boundary) {
     // Init base maps
-    let meta = await fetchJSON(`${config.tiles_server}/metadata.json`)
+    let meta
+    try {
+        meta = await fetchJSON(`${config.tiles_server}/metadata.json`)
+    } catch (e) {
+        console.error(e)
+        // something really bad is happening.
+        meta = {}
+    }
+    let isWebpAvailable = document.createElement('canvas').toDataURL('image/webp').indexOf('data:image/webp') == 0
     let base_maps = config.base_maps
     for (let m in base_maps) {
-        base_maps[m] = new L.MinecraftTileLayer(config.tiles_server, {
+        base_maps[m] = new L.tileLayer(`${config.tiles_server}/{style}/{x},{y}.{format}{cache_str}`, {
             style: base_maps[m],
+            format: config.use_webp_tile && isWebpAvailable ? 'webp' : 'png',
             maxZoom: config.max_zoom,
             minZoom: config.min_zoom,
+            maxNativeZoom: config.max_tile_zoom,
+            minNativeZoom: config.min_tile_zoom,
             attribution: config.attribution,
             tileSize: 512,
             bounds: boundary,
-            useWebpIfAvailable: config.use_webp_tile,
-            meta
+            cache_str: data => `${data.style}/${data.x},${data.y}` in meta ? `?t=${meta[`${data.style}/${data.x},${data.y}`].t}` : ''
         })
         if (m == config.default_base_map) {
             base_maps[m].addTo(map)
@@ -71,11 +108,31 @@ async function loadBaseMap(config, map, boundary) {
 }
 
 async function loadGeoJSON(config, map) {
+    async function fetchGeoJSON({ name, url }) {
+        let json = await fetchJSON(url)
+        return { name, data: json }
+    }
     // Fetch geojson if exist 
     let overlays = {}
     if (config.geojson) {
+        let sources = []
         for (let gj of Object.keys(config.geojson)) {
-            let source = await fetchJSON(config.geojson[gj].source)
+            sources.push({ name: gj, url: config.geojson[gj].source })
+        }
+        let data_raw
+        try {
+            data_raw = await Promise.all(sources.map(fetchGeoJSON))
+        } catch (e) {
+            console.error(e)
+            return {}
+        }
+        let sources_data = {}
+        for (let i of data_raw) {
+            sources_data[i.name] = i.data
+        }
+
+        for (let gj of Object.keys(config.geojson)) {
+            let source = sources_data[gj]
             let options = {}
             options.coordsToLatLng = coords => L.latLng(coords[0], coords[1])
             if (config.geojson[gj].style) {
@@ -97,17 +154,29 @@ async function loadGeoJSON(config, map) {
 async function loadMarkers(config, map) {
     if (config.marker_server) {
         let overlays = {}
-        // Fetch markers
-        let raw_marker_data = await fetchJSON(`${config.marker_server}`) // Make sure we have cache-control: no-cache server side.
-        // Marker Data: {what_category: {icon: '', markers: [{x, z, name, description}]}}
-
+        let raw_marker_data
+        try {
+            // Fetch markers
+            raw_marker_data = await fetchJSON(`${config.marker_server}`) // Make sure we have cache-control: no-cache server side.
+            // Marker Data: {what_category: {icon: '', markers: [{x, z, name, description}]}}
+        } catch (e) {
+            console.error(e)
+            return {}
+        }
+        let icons_data
+        try {
+            icons_data = await extractMarkerIcons(raw_marker_data)
+        } catch (e) {
+            console.error(e)
+            icons_data = {}
+        }
         let markers_list = {}
 
         for (let cat in raw_marker_data) {
             let markers_group = L.layerGroup()
             for (let m of raw_marker_data[cat]['markers']) {
-                markers_list[m.name] = L.marker([m.x, m.z], {
-                    icon: raw_marker_data[cat]['icon'] || new L.Icon.Default,
+                markers_list[m.name] = L.marker([m.x + 0.5, m.z + 0.5], {  // Offset applied toward pixel center.
+                    icon: icons_data.get(m.icon) || icons_data.get(raw_marker_data[cat]['icon']) || new L.Icon.Default,
                     title: m.name
                 }).bindPopup(generateMarkerPopupHTML({ x: m.x, z: m.z }, m.name, m.description))
                 markers_list[m.name].addTo(markers_group)
@@ -130,7 +199,7 @@ async function loadMarkers(config, map) {
 
         window.gotoMarkerFromList = function (name) {
             let loc = markers_list[name].getLatLng()
-            map.flyTo(loc, 2)
+            map.flyTo(loc, config.default_zoom + 2 * config.zoom_snap)
             markers_list[name].openPopup()
             if (slide_menu) slide_menu.close()
         }
@@ -140,30 +209,33 @@ async function loadMarkers(config, map) {
 }
 
 window.initMaps = async function () {
-    let config = await fetchJSON('./config.json')  // Make sure we have cache-control: no-cache server side.
+    let config
+    try {
+        config = await fetchJSON('./config.json')  // Make sure we have cache-control: no-cache server side.
+    } catch (e) {
+        console.error(e)
+        document.getElementById('map').innerHTML = "地图配置文件加载失败，请检查控制台。"
+        return
+    }
+
     let boundary = L.latLngBounds(L.latLng(config.boundary[0][0], config.boundary[0][1]), L.latLng(config.boundary[1][0], config.boundary[1][1]))
 
     window.document.title = config.title
 
     // Init map
-    let MinecraftProjection = {
-        project: function (latlng) {
-            return new L.Point(latlng.lat, latlng.lng);
-        },
-        unproject: function (point) {
-            return new L.LatLng(point.x, point.y);
-        }
-    }
     let MinecraftCRS = L.extend({}, L.CRS.Simple, {
-        projection: MinecraftProjection,
-        transformation: L.transformation(1, 0, 1, 0)
+        projection: {
+            project: latlng => L.point(latlng.lat, latlng.lng),
+            unproject: point => L.latLng(point.x, point.y)
+        },
+        transformation: L.transformation(1 / Math.pow(2, config.max_tile_zoom), 0, 1 / Math.pow(2, config.max_tile_zoom), 0)
     })
     document.getElementById('map').innerHTML = ""
     let map = window.map = L.map('map', {
-        center: [0, 0],
-        zoom: 0,
-        zoomSnap: 0.25,
-        zoomDelta: 0.5,
+        center: config.center || [0, 0],
+        zoom: config.default_zoom || 0,
+        zoomSnap: config.zoom_snap || 0.25,
+        zoomDelta: config.zoom_delta || 0.5,
         crs: MinecraftCRS,
         maxBounds: boundary
     })
@@ -189,18 +261,24 @@ window.initMaps = async function () {
 
     if (location.hash.match(/^#-{0,1}[0-9]+,-{0,1}[0-9]+,-{0,1}[0-9]+$/)) {
         let [lat, lng, zoom] = location.hash.slice(1).split(',')
-        map.setView(L.latLng(lat, lng), parseInt(zoom) / 4)
-        let popup = L.popup().setLatLng(L.latLng(lat, lng)).setContent(`<a href=${location.href}>(${lat},${lng})</a>`).openOn(map)
+        map.setView(L.latLng(lat, lng), parseInt(zoom) * config.zoom_snap)
+        let popup = L.popup({ className: 'popup-coord-tip' }).setLatLng(L.latLng(lat, lng)).setContent(`<a href=${location.href}>(${lat},${lng})</a>`).openOn(map)
     } else if (this.location.hash.match(/^#-{0,1}[0-9]+,-{0,1}[0-9]+$/)) {
         let [lat, lng] = location.hash.slice(1).split(',')
-        map.setView(L.latLng(lat, lng), 1)
-        let popup = L.popup().setLatLng(L.latLng(lat, lng)).setContent(`<a href=${location.href}>(${lat},${lng})</a>`).openOn(map)
+        map.setView(L.latLng(lat, lng), config.default_zoom + 2 * config.zoom_snap)
+        let popup = L.popup({ className: 'popup-coord-tip' }).setLatLng(L.latLng(lat, lng)).setContent(`<a href=${location.href}>(${lat},${lng})</a>`).openOn(map)
     }
 
     window.onhashchange = (ev) => {
-        if (!location.hash.match(/^#-{0,1}[0-9]+,-{0,1}[0-9]+,-{0,1}[0-9]+$/)) return
-        let [lat, lng, zoom] = location.hash.slice(1).split(',')
-        map.flyTo(L.latLng(lat, lng), parseInt(zoom) / 4)
+        if (location.hash.match(/^#-{0,1}[0-9]+,-{0,1}[0-9]+,-{0,1}[0-9]+$/)) {
+            let [lat, lng, zoom] = location.hash.slice(1).split(',')
+            map.setView(L.latLng(lat, lng), parseInt(zoom) * config.zoom_snap)
+            let popup = L.popup({ className: 'popup-coord-tip' }).setLatLng(L.latLng(lat, lng)).setContent(`<a href=${location.href}>(${lat},${lng})</a>`).openOn(map)
+        } else if (this.location.hash.match(/^#-{0,1}[0-9]+,-{0,1}[0-9]+$/)) {
+            let [lat, lng] = location.hash.slice(1).split(',')
+            map.setView(L.latLng(lat, lng), config.default_zoom + 2 * config.zoom_snap)
+            let popup = L.popup({ className: 'popup-coord-tip' }).setLatLng(L.latLng(lat, lng)).setContent(`<a href=${location.href}>(${lat},${lng})</a>`).openOn(map)
+        }
     }
 
     map.on('click', function (e) {
@@ -208,14 +286,14 @@ window.initMaps = async function () {
         lat = Math.floor(lat)
         lng = Math.floor(lng)
 
-        let zoom = map.getZoom() * 4
+        let zoom = map.getZoom() / config.zoom_snap
         let jumpuri = location.href.replace(/#.+/, '') + `#${lat},${lng},${zoom}`
-        let popup = L.popup().setLatLng(e.latlng).setContent(`<a href="${jumpuri}">(${lat},${lng})</a>`).openOn(map)
-        if (history.pushState) {
+        let popup = L.tooltip({ interactive: true, className: 'mouse-coord-tip' }).setLatLng(e.latlng).setContent(`<a href="${jumpuri}">(${lat},${lng})</a>`).addTo(map)
+        /*if (history.pushState) {
             history.pushState(null, null, `#${lat},${lng},${zoom}`);
         }
         else {
             location.hash = `#${lat},${lng},${zoom}`;
-        }
+        }*/
     })
 }

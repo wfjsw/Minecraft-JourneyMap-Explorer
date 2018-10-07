@@ -1,7 +1,7 @@
 {
-    "title": "",
-    "tiles_server": "",
-    "marker_server": "",
+    "title": "v2 - YAKM",
+    "tiles_server": "https://kedama-map-tiles.jsw3286.eu.org/v2",
+    "marker_server": "https://kedama-map-markers.jsw3286.eu.org/getMarkers?map=v2",
     "boundary": [
         [-5000, -5000],
         [5000, 5000]
@@ -12,9 +12,36 @@
         "等高线": "topo"
     },
     "default_base_map": "日间",
-    "attribution": "Nothing yet.",
-    "max_zoom": 0,
-    "min_zoom": 0,
-    "geojson": {},
+    "center": [0, 0],
+    "default_zoom": 5,
+    "max_zoom": 8,
+    "min_zoom": 2,
+    "max_tile_zoom": 5,
+    "min_tile_zoom": 5,
+    "zoom_snap": 0.25,
+    "zoom_delta": 0.5,
+    "attribution": "<a href=\"https://craft.moe\">KedamaCraft</a> Contributors",
+    "geojson": {
+        "铁路交通图": {
+            "source": "https://cdn.jsdelivr.net/gh/wfjsw/kedama-map-assets@a3c2974d767077bac65ebe1f5d2bf709233d37f0/geojson/v2/railway.geojson", 
+            "style": {
+                "stroke": true,
+                "color": "#FFDC00",
+                "weight": 5
+            },
+            "added_by_default": false,
+            "attribution": "<a href=\"https://github.com/tolking/map\">Traffic-Map © ououe</a>"
+        },
+        "冰道交通图": {
+            "source": "https://cdn.jsdelivr.net/gh/wfjsw/kedama-map-assets@a3c2974d767077bac65ebe1f5d2bf709233d37f0/geojson/v2/iceway.geojson",
+            "style": {
+                "stroke": true,
+                "color": "#7FDBFF",
+                "weight": 5
+            },
+            "added_by_default": false,
+            "attribution": "<a href=\"https://github.com/tolking/map\">Traffic-Map © ououe</a>"
+        }
+    },
     "use_webp_tile": true
 }
