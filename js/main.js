@@ -1,29 +1,14 @@
 
 async function fetchJSON(url) {
-    if ('fetch' in window) {
-        let data = await fetch(url)
-        let json = await data.json()
-        return json
-    } else {
-        // Pretty old browser
-        return new Promise((rs, rj) => {
-            let xmlhttp = new XMLHttpRequest();
-            xmlhttp.open('GET', url, true);
-            xmlhttp.onload = function () {
-                try {
-                    rs(JSON.parse(this.responseText))
-                } catch (e) {
-                    rj(e)
-                }
-            }
-            xmlhttp.onerror = function (e) {
-                rj(e)
-            }
-            xmlhttp.send();
-            return xmlhttp
-        })
-    }
+    const data = await fetch(url)
+    const json = await data.json()
+    return json
+}
 
+async function fetchData(url) {
+    const data = await fetch(url)
+    const text = await data.text()
+    return text
 }
 
 function generateMarkerPopupHTML(coord, name, description = "") {
@@ -46,7 +31,7 @@ function generateMarkerListHTML(markers) {
         html += `<ul class="marker-list-marker-list">`
         for (let m of markers[c]['markers']) {
             html += `<li class="marker-list-marker">`
-            html += `<a class="marker-list-marker-clickable" href="#" onclick="gotoMarkerFromList('${m.name}');">${m.name}</a>`
+            html += `<a class="marker-list-marker-clickable" href="#" onclick="gotoMarkerFromList('${btoa(escape(m.name))}');">${m.name}</a>`
             html += `</li>`
         }
         html += `</ul></li>`
@@ -56,9 +41,26 @@ function generateMarkerListHTML(markers) {
 }
 
 async function extractMarkerIcons(marker_data) {
+    const avatar_size = 30
     async function fetchMarker(url) {
-        let json = await fetchJSON(url)
+        const json = await fetchJSON(url)
         return { url: url, data: L.icon(json) }
+    }
+    async function fetchAvatar(url) {
+        const uuid = url.match(/avatar:\/\/([0-9a-fA-F]{32})/)[1]
+        return {
+            url, data: L.icon({
+                iconUrl: `https://minotar.net/helm/${uuid}/${avatar_size}`,
+                iconSize: [avatar_size, avatar_size],
+                iconAnchor: [avatar_size / 2, avatar_size / 2],
+                popupAnchor: [0, -(avatar_size / 4)],
+                tooltipAnchor: [0, -(avatar_size / 2)]
+            })
+        }
+    }
+    async function markerUrlDispatcher(url) {
+        if (url.match(/https?:\/\//)) return fetchMarker(url)
+        else if (url.match(/avatar:\/\//)) return fetchAvatar(url)
     }
     let icons = new Map()
     for (let cat in marker_data) {
@@ -67,7 +69,7 @@ async function extractMarkerIcons(marker_data) {
         }
         if (marker_data[cat].icon) icons.set(marker_data[cat].icon, marker_data[cat].icon)
     }
-    let data_raw = await Promise.all([...icons.values()].map(url => fetchMarker(url)))
+    let data_raw = await Promise.all([...icons.values()].map(url => markerUrlDispatcher(url)))
     for (let m of data_raw) {
         icons.set(m.url, m.data)
     }
@@ -85,11 +87,19 @@ async function loadBaseMap(config, map, boundary) {
         meta = {}
     }
     let isWebpAvailable = document.createElement('canvas').toDataURL('image/webp').indexOf('data:image/webp') == 0
+    // let isSlowNetwork = false 
+    // let isSuperSlowNetwork = false
+    // if (navigator.connection) {
+    //     if (navigator.connection.effectiveType != '4g') isSlowNetwork = true
+    //     // if (navigator.connection.effectiveType == '2g' || navigator.connection.effectiveType == 'slow-2g') isSuperSlowNetwork = isSlowNetwork = true
+    //     if (navigator.connection.saveData) isSuperSlowNetwork = isSlowNetwork = true
+    //     if (navigator.connection.downlink && navigator.connection.downlink < 2) isSuperSlowNetwork = isSlowNetwork = true
+    // }
     let base_maps = config.base_maps
     for (let m in base_maps) {
-        base_maps[m] = new L.tileLayer(`${config.tiles_server}/{style}/{x},{y}.{format}{cache_str}`, {
+        base_maps[m] = new L.tileLayer(`${config.tiles_server}/z{z}/{style}/{x},{y}.{format}{cache_str}`, {
             style: base_maps[m],
-            format: config.use_webp_tile && isWebpAvailable ? 'webp' : 'png',
+            format: config.use_webp_tile && isWebpAvailable ? 'webp' : 'png', // config.use_webp_tile && isWebpAvailable && !isSuperSlowNetwork ? 'webp' : isSlowNetwork ? 'jpg' : 'png',
             maxZoom: config.max_zoom,
             minZoom: config.min_zoom,
             maxNativeZoom: config.max_tile_zoom,
@@ -97,7 +107,18 @@ async function loadBaseMap(config, map, boundary) {
             attribution: config.attribution,
             tileSize: 512,
             bounds: boundary,
-            cache_str: data => `${data.style}/${data.x},${data.y}` in meta ? `?t=${meta[`${data.style}/${data.x},${data.y}`].t}` : ''
+            cache_str: data => {
+                let latest_timestamp = 0
+                let one_side_tile_num = Math.pow(2, Math.abs(data.z - config.max_tile_zoom))
+                for (let x = data.x * one_side_tile_num; x < (data.x + 1) * one_side_tile_num; x++) {
+                    for (let y = data.y * one_side_tile_num; y < (data.y + 1) * one_side_tile_num; y++) {
+                        if (`${data.style}/${x},${y}` in meta && latest_timestamp < meta['base'] - meta[`${data.style}/${x},${y}`]) {
+                            latest_timestamp = meta['base'] - meta[`${data.style}/${x},${y}`]
+                        }
+                    }
+                }
+                return latest_timestamp > 0 ? `?t=${latest_timestamp}` : ''
+            }
         })
         if (m == config.default_base_map) {
             base_maps[m].addTo(map)
@@ -198,8 +219,9 @@ async function loadMarkers(config, map) {
         }
 
         window.gotoMarkerFromList = function (name) {
+            name = unescape(atob(name))
             let loc = markers_list[name].getLatLng()
-            map.flyTo(loc, config.default_zoom + 2 * config.zoom_snap)
+            map.flyTo(loc, config.focus_in_zoom)
             markers_list[name].openPopup()
             if (slide_menu) slide_menu.close()
         }
@@ -208,10 +230,23 @@ async function loadMarkers(config, map) {
     return {}
 }
 
+async function loadPlugin(url, mapViewer) {
+    try {
+        const {init} = await import(url)
+        await init(mapViewer)
+        return true
+    } catch (e) {
+        console.error(`Failed to load plugin ${url}`)
+        console.error(e)
+        return false
+    }
+}
+
 window.initMaps = async function () {
+    window.mapViewer = {}
     let config
     try {
-        config = await fetchJSON('./config.json')  // Make sure we have cache-control: no-cache server side.
+        config = window.mapViewer.config = await fetchJSON('./config.json')  // Make sure we have cache-control: no-cache server side.
     } catch (e) {
         console.error(e)
         document.getElementById('map').innerHTML = "地图配置文件加载失败，请检查控制台。"
@@ -231,7 +266,7 @@ window.initMaps = async function () {
         transformation: L.transformation(1 / Math.pow(2, config.max_tile_zoom), 0, 1 / Math.pow(2, config.max_tile_zoom), 0)
     })
     document.getElementById('map').innerHTML = ""
-    let map = window.map = L.map('map', {
+    let map = window.mapViewer.map = L.map('map', {
         center: config.center || [0, 0],
         zoom: config.default_zoom || 0,
         zoomSnap: config.zoom_snap || 0.25,
@@ -254,10 +289,123 @@ window.initMaps = async function () {
 
     let [base_maps, overlay_geojson, overlay_markers] = await Promise.all([loadBaseMap(config, map, boundary), loadGeoJSON(config, map), loadMarkers(config, map)])
 
-    let overlays = Object.assign({}, overlay_geojson, overlay_markers)
+    let drawnItems = L.featureGroup();
+    map.addLayer(drawnItems);
+    let shapeOptions = {
+        color: '#ff4444',
+        opacity: 0.7,
+        fillOpacity: 0.3,
+        weight: 5
+    }
+    let drawControl = new L.Control.Draw({
+        edit: {
+            featureGroup: drawnItems
+        },
+        draw: {
+            polyline: {
+                shapeOptions
+            },
+            polygon: {
+                shapeOptions,
+                showArea: true
+            },
+            rectangle: {
+                shapeOptions
+            },
+            circle: {
+                shapeOptions
+            },
+            circlemarker: false
+        }
+    });
+    map.addControl(drawControl);
+
+    let overlay_drawnItems = {
+        "手绘标记": drawnItems
+    }
+
+    let overlays = Object.assign({}, overlay_geojson, overlay_markers, overlay_drawnItems)
+
+    const saveDrawnItem = () => {
+        let data = []
+
+        drawnItems.eachLayer(layer => {
+            let item = {}
+            if (layer instanceof L.Circle) {
+                item.type = 'circle'
+                item.latLng = layer.getLatLng()
+                item.radius = layer.getRadius()
+                item.color = layer.options.color
+            } else if (layer instanceof L.Polygon) {
+                item.type = 'polygon'
+                item.latLngs = layer.getLatLngs()
+                item.color = layer.options.color
+            } else if (layer instanceof L.Polyline) {
+                item.type = 'polyline'
+                item.latLngs = layer.getLatLngs()
+                item.color = layer.options.color
+            } else if (layer instanceof L.Marker) {
+                item.type = 'marker'
+                item.latLng = layer.getLatLng()
+                item.color = layer.options.icon.options.color
+            } else {
+                console.warn('Unknown layer type when saving draw tools layer')
+                return //.eachLayer 'continue'
+            }
+            data.push(item)
+        })
+        localStorage['drawn-layers'] = JSON.stringify(data)
+        // console.log('draw-tools: saved to localStorage')
+    }
+
+    const loadDrawnItem = () => {
+        try {
+            let dataStr = localStorage['drawn-layers']
+            if (dataStr === undefined) return
+
+            let data = JSON.parse(dataStr)
+            for (let item of data) {
+                let layer = null
+                let extraOpt = {}
+                if (item.color) extraOpt.color = item.color
+
+                switch (item.type) {
+                    case 'polyline':
+                        layer = L.polyline(item.latLngs, L.extend({}, extraOpt))
+                        break
+                    case 'polygon':
+                        layer = L.polygon(item.latLngs, L.extend({}, extraOpt))
+                        break
+                    case 'circle':
+                        layer = L.circle(item.latLng, item.radius, L.extend({}, extraOpt))
+                        break
+                    case 'marker':
+                        layer = L.marker(item.latLng, L.extend({}, extraOpt))
+                        break
+                    default:
+                        console.warn('unknown layer type "' + item.type + '" when loading draw tools layer')
+                        break
+                }
+                if (layer) {
+                    drawnItems.addLayer(layer)
+                }
+            }
+        } catch (e) {
+            console.warn('draw-tools: failed to load data from localStorage: ' + e)
+        }
+    }
+
+    loadDrawnItem()
+
+    map.on('draw:created', e => drawnItems.addLayer(e.layer))
+
+    map.on('draw:created', saveDrawnItem)
+    map.on('draw:edited', saveDrawnItem)
+    map.on('draw:deleted', saveDrawnItem)
 
     // Init layers control
-    L.control.layers(base_maps, overlays).addTo(map)
+    const layerCtl = window.mapViewer.layerCtl = L.control.layers(base_maps, overlays)
+    layerCtl.addTo(map)
 
     if (location.hash.match(/^#-{0,1}[0-9]+,-{0,1}[0-9]+,-{0,1}[0-9]+$/)) {
         let [lat, lng, zoom] = location.hash.slice(1).split(',')
@@ -265,7 +413,7 @@ window.initMaps = async function () {
         let popup = L.popup({ className: 'popup-coord-tip' }).setLatLng(L.latLng(lat, lng)).setContent(`<a href=${location.href}>(${lat},${lng})</a>`).openOn(map)
     } else if (this.location.hash.match(/^#-{0,1}[0-9]+,-{0,1}[0-9]+$/)) {
         let [lat, lng] = location.hash.slice(1).split(',')
-        map.setView(L.latLng(lat, lng), config.default_zoom + 2 * config.zoom_snap)
+        map.setView(L.latLng(lat, lng), config.focus_in_zoom)
         let popup = L.popup({ className: 'popup-coord-tip' }).setLatLng(L.latLng(lat, lng)).setContent(`<a href=${location.href}>(${lat},${lng})</a>`).openOn(map)
     }
 
@@ -276,7 +424,7 @@ window.initMaps = async function () {
             let popup = L.popup({ className: 'popup-coord-tip' }).setLatLng(L.latLng(lat, lng)).setContent(`<a href=${location.href}>(${lat},${lng})</a>`).openOn(map)
         } else if (this.location.hash.match(/^#-{0,1}[0-9]+,-{0,1}[0-9]+$/)) {
             let [lat, lng] = location.hash.slice(1).split(',')
-            map.setView(L.latLng(lat, lng), config.default_zoom + 2 * config.zoom_snap)
+            map.setView(L.latLng(lat, lng), config.focus_in_zoom)
             let popup = L.popup({ className: 'popup-coord-tip' }).setLatLng(L.latLng(lat, lng)).setContent(`<a href=${location.href}>(${lat},${lng})</a>`).openOn(map)
         }
     }
@@ -296,4 +444,13 @@ window.initMaps = async function () {
             location.hash = `#${lat},${lng},${zoom}`;
         }*/
     })
+
+    // Load plugins if exist
+    if (config.plugins) {
+        for (const url of config.plugins) {
+            await loadPlugin(url, window.mapViewer)
+        }
+    }
 }
+
+window.initMaps()
