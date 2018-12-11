@@ -30,6 +30,13 @@ L.Control.Coordinates = L.Control.extend({
 			that = this,
 			container = this._container = L.DomUtil.create('div', className);
 
+		that.options.unitPerTileLine = Object.values(map._layers).find(n => n instanceof L.TileLayer).options.tileSize
+		that._offset = Object.values(map._layers).find(n => n instanceof L.TileLayer).options.offset
+		
+		map.on('baselayerchange', function (e) {
+			that.options.unitPerTileLine = e.layer.options.tileSize
+			that._offset = e.layer.options.offset
+		});
 
 		L.DomEvent.disableClickPropagation(container);
 
@@ -70,7 +77,7 @@ L.Control.Coordinates = L.Control.extend({
 		if (obj.latlng) {
 			L.DomUtil.get(this._lat).innerHTML = '<strong>' + this.options.latitudeText + ':</strong> ' + obj.latlng.lat.toFixed(this.options.precision).toString();
 			L.DomUtil.get(this._lng).innerHTML = '<strong>' + this.options.longitudeText + ':</strong> ' + obj.latlng.lng.toFixed(this.options.precision).toString();
-			L.DomUtil.get(this._tile).innerHTML = '<strong>tile: </strong> ' + Math.floor(obj.latlng.lat / this.options.unitPerTileLine) + ',' + Math.floor(obj.latlng.lng / this.options.unitPerTileLine);
+			L.DomUtil.get(this._tile).innerHTML = '<strong>tile: </strong> ' + Math.floor((obj.latlng.lat - this._offset[0]) / this.options.unitPerTileLine) + ',' + Math.floor((obj.latlng.lng - this._offset[1]) / this.options.unitPerTileLine);
 			L.DomUtil.get(this._chunk).innerHTML = '<strong>chunk: </strong> ' + Math.floor(obj.latlng.lat / this.options.unitPerChunk) + ',' + Math.floor(obj.latlng.lng / this.options.unitPerChunk);
 		}
 	}

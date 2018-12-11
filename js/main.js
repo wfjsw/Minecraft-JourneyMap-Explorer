@@ -11,6 +11,16 @@ async function fetchData(url) {
     return text
 }
 
+function getCRS(tileZoom = 5, offsetX = 0, offsetY = 0) {
+    return L.extend({}, L.CRS.Simple, {
+        projection: {
+            project: latlng => L.point(latlng.lat - offsetX, latlng.lng - offsetY),
+            unproject: point => L.latLng(point.x + offsetX, point.y + offsetY)
+        },
+        transformation: L.transformation(1 / Math.pow(2, tileZoom), 0, 1 / Math.pow(2, tileZoom), 0)
+    })
+}
+
 function generateMarkerPopupHTML(coord, name, description = "") {
     let html = `<div class="map-marker-popup">\n`
     html += `<div class="map-marker-title"> <span style="font-weight: bold;">${name}</span></div>\n`
@@ -76,44 +86,32 @@ async function extractMarkerIcons(marker_data) {
     return icons
 }
 
-async function loadBaseMap(config, map, boundary) {
+async function loadBaseMap(config, map, boundary, meta) {
     // Init base maps
-    let meta
-    try {
-        meta = await fetchJSON(`${config.tiles_server}/metadata.json`)
-    } catch (e) {
-        console.error(e)
-        // something really bad is happening.
-        meta = {}
-    }
     let isWebpAvailable = document.createElement('canvas').toDataURL('image/webp').indexOf('data:image/webp') == 0
-    // let isSlowNetwork = false 
-    // let isSuperSlowNetwork = false
-    // if (navigator.connection) {
-    //     if (navigator.connection.effectiveType != '4g') isSlowNetwork = true
-    //     // if (navigator.connection.effectiveType == '2g' || navigator.connection.effectiveType == 'slow-2g') isSuperSlowNetwork = isSlowNetwork = true
-    //     if (navigator.connection.saveData) isSuperSlowNetwork = isSlowNetwork = true
-    //     if (navigator.connection.downlink && navigator.connection.downlink < 2) isSuperSlowNetwork = isSlowNetwork = true
-    // }
-    let base_maps = config.base_maps
-    for (let m in base_maps) {
-        base_maps[m] = new L.tileLayer(`${config.tiles_server}/z{z}/{style}/{x},{y}.{format}{cache_str}`, {
-            style: base_maps[m],
-            format: config.use_webp_tile && isWebpAvailable ? 'webp' : 'png', // config.use_webp_tile && isWebpAvailable && !isSuperSlowNetwork ? 'webp' : isSlowNetwork ? 'jpg' : 'png',
+    let base_maps = {}
+    for (let m of config.enabled_base_maps) {
+        if (!(m in meta['styles'])) continue
+        const styleopt = meta['styles'][m]
+        base_maps[styleopt.display_name] = new L.tileLayer(`${config.tiles_server}/z{z}/{style}/{x},{y}.{format}{cache_str}`, {
+            style: m,
+            format: config.use_webp_tile && isWebpAvailable ? 'webp' : 'png',
             maxZoom: config.max_zoom,
             minZoom: config.min_zoom,
             maxNativeZoom: config.max_tile_zoom,
             minNativeZoom: config.min_tile_zoom,
             attribution: config.attribution,
-            tileSize: 512,
+            tileSize: styleopt.size,
             bounds: boundary,
+            crsOverride: getCRS(config.max_tile_zoom, styleopt.offset[0], styleopt.offset[1]),
+            offset: styleopt.offset,
             cache_str: data => {
                 let latest_timestamp = 0
                 let one_side_tile_num = Math.pow(2, Math.abs(data.z - config.max_tile_zoom))
                 for (let x = data.x * one_side_tile_num; x < (data.x + 1) * one_side_tile_num; x++) {
                     for (let y = data.y * one_side_tile_num; y < (data.y + 1) * one_side_tile_num; y++) {
-                        if (`${data.style}/${x},${y}` in meta && latest_timestamp < meta['base'] - meta[`${data.style}/${x},${y}`]) {
-                            latest_timestamp = meta['base'] - meta[`${data.style}/${x},${y}`]
+                        if (`${x},${y}` in meta['styles'][m]['tiles'] && latest_timestamp < meta['base'] - meta['styles'][m]['tiles'][`${x},${y}`]) {
+                            latest_timestamp = meta['base'] - meta['styles'][m]['tiles'][`${x},${y}`]
                         }
                     }
                 }
@@ -121,7 +119,9 @@ async function loadBaseMap(config, map, boundary) {
             }
         })
         if (m == config.default_base_map) {
-            base_maps[m].addTo(map)
+            map.options.crs = base_maps[styleopt.display_name].options.crsOverride
+            map._resetView(map.getCenter(), map.getZoom())
+            base_maps[styleopt.display_name].addTo(map)
         }
     }
 
@@ -232,7 +232,7 @@ async function loadMarkers(config, map) {
 
 async function loadPlugin(url, mapViewer) {
     try {
-        const {init} = await import(url)
+        const { init } = await import(url)
         await init(mapViewer)
         return true
     } catch (e) {
@@ -244,36 +244,47 @@ async function loadPlugin(url, mapViewer) {
 
 window.initMaps = async function () {
     window.mapViewer = {}
-    let config
+    let config, basemap_meta
+    const progress = document.getElementById('progress')
+    progress.innerText = ''
     try {
+        progress.innerText += '正在加载配置文件... '
         config = window.mapViewer.config = await fetchJSON('./config.json')  // Make sure we have cache-control: no-cache server side.
+        progress.innerText += 'ok\n'
+        progress.innerText += '正在加载地图信息... '
+        basemap_meta = await fetchJSON(`${config.tiles_server}/metadata.json`)
+        progress.innerText += 'ok\n'
     } catch (e) {
         console.error(e)
-        document.getElementById('map').innerHTML = "地图配置文件加载失败，请检查控制台。"
+        progress.innerText += "地图配置文件加载失败，请检查控制台。"
         return
     }
 
-    let boundary = L.latLngBounds(L.latLng(config.boundary[0][0], config.boundary[0][1]), L.latLng(config.boundary[1][0], config.boundary[1][1]))
+    let tile_boundary = L.latLngBounds(L.latLng(config.boundary[0][0], config.boundary[0][1]), L.latLng(config.boundary[1][0], config.boundary[1][1]))
+    let view_boundary = L.latLngBounds(L.latLng(config.boundary[0][0] * 1.5, config.boundary[0][1] * 1.5), L.latLng(config.boundary[1][0] * 1.5, config.boundary[1][1] * 1.5))
 
     window.document.title = config.title
 
     // Init map
-    let MinecraftCRS = L.extend({}, L.CRS.Simple, {
-        projection: {
-            project: latlng => L.point(latlng.lat, latlng.lng),
-            unproject: point => L.latLng(point.x, point.y)
-        },
-        transformation: L.transformation(1 / Math.pow(2, config.max_tile_zoom), 0, 1 / Math.pow(2, config.max_tile_zoom), 0)
-    })
     document.getElementById('map').innerHTML = ""
     let map = window.mapViewer.map = L.map('map', {
         center: config.center || [0, 0],
         zoom: config.default_zoom || 0,
         zoomSnap: config.zoom_snap || 0.25,
         zoomDelta: config.zoom_delta || 0.5,
-        crs: MinecraftCRS,
-        maxBounds: boundary
+        crs: getCRS(config.max_tile_zoom, 0, 0),
+        maxBounds: view_boundary
     })
+
+    map.on('baselayerchange', (e) => {
+        // HACK: https://stackoverflow.com/questions/30862298/in-leaflet-how-to-change-crs-and-other-map-options
+        if (e.layer.options.crsOverride) {
+            map.options.crs = e.layer.options.crsOverride
+            map._resetView(map.getCenter(), map.getZoom())
+        }
+    })
+
+    let base_maps = await loadBaseMap(config, map, tile_boundary, basemap_meta)
 
     // Init coords viewer
     let coord_viewer = new L.Control.Coordinates({
@@ -287,7 +298,7 @@ window.initMaps = async function () {
         coord_viewer.setCoordinates(e);
     })
 
-    let [base_maps, overlay_geojson, overlay_markers] = await Promise.all([loadBaseMap(config, map, boundary), loadGeoJSON(config, map), loadMarkers(config, map)])
+    let [overlay_geojson, overlay_markers] = await Promise.all([loadGeoJSON(config, map), loadMarkers(config, map)])
 
     let drawnItems = L.featureGroup();
     map.addLayer(drawnItems);

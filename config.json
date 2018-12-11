@@ -6,12 +6,8 @@
         [-5000, -5000],
         [5000, 5000]
     ],
-    "base_maps": {
-        "日间": "day", 
-        "夜间": "night",
-        "等高线": "topo"
-    },
-    "default_base_map": "日间",
+    "enabled_base_maps": ["day", "night", "topo"],
+    "default_base_map": "day",
     "center": [0, 0],
     "default_zoom": 5,
     "max_zoom": 8,
