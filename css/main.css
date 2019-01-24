@@ -47,9 +47,77 @@
     -ms-interpolation-mode: nearest-neighbor; /* IE */
 }
 
+
 .leaflet-container {
     background: #000;
 }
+
+/* @media only screen and (max-width: 768px) { */
+@media screen and (pointer: coarse), screen and (pointer: none), print, speech {
+  .mobile-hide {
+    visibility: hidden;
+    display: none;
+  }
+}
+
+.marker-list-create-btn {
+    margin-left: 1.5em;
+    font-size: 1.5em;
+}
+
+.marker-editor-title {
+    font-size: 1.5em;
+    text-align: center;
+    padding: 5px;
+}
+
+.map-marker-edit-btn {
+    margin-left: 8px;
+}
+
+.marker-editor-textbox-normal, .marker-editor-textbox-multiline {
+    margin: 3px 0px;
+    padding: 5px;
+}
+
+.textbox-full, .buttonbox-full {
+    box-sizing: border-box;
+    width: 100%;
+}
+
+.textbox-half, .buttonbox-half {
+    box-sizing: border-box;
+    width: 50%;
+}
+
+.textarea-lock-width {
+    resize: vertical;
+}
+
+.marker-editor-button-flat {
+    border: none;
+    text-align: center;
+    padding: 8px;
+    cursor: pointer;
+}
+
+.marker-editor-button-flat:disabled {
+    opacity: 0.7; 
+    cursor: default; 
+    /* visibility: hidden; */
+}
+
+.button-color-delete {
+    background: #F44336;
+    color: white;
+}
+
+.button-color-submit {
+    background: #4CAF50;
+    color: white;
+}
+
+
 
 body {
     padding: 0;

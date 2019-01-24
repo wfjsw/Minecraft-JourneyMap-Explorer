@@ -6,6 +6,7 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <title>Minecraft JourneyMap Explorer</title>
     <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link rel="preload" href="./config.json" as="fetch" crossorigin>
     <meta name="viewport" content="width=device-width, initial-scale=1">
 
     <!-- Global site tag (gtag.js) - Google Analytics -->
@@ -21,17 +22,21 @@
 
 <body>
     <div id="map">正在加载地图，请稍候...<br><div id="progress"></div></div>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.3.4/dist/leaflet.min.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet-draw@1.0.3/dist/leaflet.draw.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.3.4/dist/leaflet.css" integrity="sha256-YR4HrDE479EpYZgeTkQfgVJq08+277UXxMLbi/YP69o=" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet-draw@1.0.4/dist/leaflet.draw.css" integrity="sha256-XzD3RpaHPv7lzX9qt+2n1j5cWj48O24KsgaGYpKN8x8=" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet-dialog@1.0.5/Leaflet.Dialog.css" integrity="sha256-ytrTCm2VEyrTPr9Fk2o+NP2HOZ2QkQB2ZaOnlUo68D4=" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" integrity="sha256-eZrrJcwDc/3uDhsdt61sL2oOBY362qM3lon1gyExkL0=" crossorigin="anonymous">
     <link href="css/L.Control.Coordinates.css?3" rel="stylesheet">
     <link href="css/L.Control.SlideMenu.css?1" rel="stylesheet">
-    <link href="css/main.css?10" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.3.4/dist/leaflet.min.js" data-cfasync="false" defer></script>
-    <script src="https://cdn.jsdelivr.net/npm/leaflet-draw@1.0.3/dist/leaflet.draw.js" data-cfasync="false" defer></script>
+    <link href="css/main.css?25" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/showdown@1.9.0/dist/showdown.min.js" integrity="sha256-LSUpTY0kkXGKvcBC9kbmgibmx3NVVgJvAEfTZbs51mU=" crossorigin="anonymous" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.3.4/dist/leaflet.js" integrity="sha256-tfcLorv/GWSrbbsn6NVgflWp1YOmTjyJ8HWtfXaOaJc=" crossorigin="anonymous" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet-draw@1.0.4/dist/leaflet.draw.js" integrity="sha256-siofc4Uwjlra3YWkwthOn8Uj69cNN4aMug/iOHNiRgs=" crossorigin="anonymous" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet-dialog@1.0.5/Leaflet.Dialog.js" integrity="sha256-sRBJvRjAnJBKpjs96BdSlDB+ZZVaEn/UjA4yFrFMR70=" crossorigin="anonymous" defer></script>
     <script src="js/L.Control.Coordinates.min.js?9" data-cfasync="false" defer></script>
     <script src="js/L.Control.SlideMenu.min.js?3" data-cfasync="false" defer></script>
-    <script src="js/main.js?77" data-cfasync="false" defer></script>
-    <script></script>
+    <script src="js/marker-editor.js?23" data-cfasync="false" defer></script>
+    <script src="js/main.js?101" data-cfasync="false" defer></script>
 
 </body>
 
