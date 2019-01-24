@@ -139,13 +139,47 @@ async function extractMarkerIcons(marker_data) {
     return icons
 }
 
+function getTileCellTimestamp(config, meta, map) {
+    return function (data) {
+        let latest_timestamp = 0
+        let one_side_tile_num = Math.pow(2, Math.abs(data.z - config.max_tile_zoom))
+        for (let x = data.x * one_side_tile_num; x < (data.x + 1) * one_side_tile_num; x++) {
+            for (let y = data.y * one_side_tile_num; y < (data.y + 1) * one_side_tile_num; y++) {
+                if (!(`${x},${y}` in meta['styles'][map]['tiles'])) continue
+                const cell_timestamp = B62decode(meta['styles'][map]['tiles'][`${x},${y}`])
+                if (latest_timestamp < cell_timestamp) {
+                    latest_timestamp = cell_timestamp
+                }
+            }
+        }
+        return latest_timestamp
+    }
+}
+
 async function loadBaseMap(config, map, boundary, meta) {
     // Init base maps
+    L.TileLayer.include({
+        _isValidTile: function (coords) {
+            const isBoundaryValid = L.GridLayer.prototype._isValidTile.call(this, coords)
+            if (!isBoundaryValid) return false
+            if (this.options.checkValid) {
+                const urlData = {
+                    x: coords.x,
+                    y: coords.y,
+                    z: this._getZoomForUrl()
+                }
+                const isDataValid = this.options.checkValid(urlData)
+                if (isDataValid <= 0) return false
+            }
+            return true
+        }
+    })
     let isWebpAvailable = document.createElement('canvas').toDataURL('image/webp').indexOf('data:image/webp') == 0
     let base_maps = {}
     for (let m of config.enabled_base_maps) {
         if (!(m in meta['styles'])) continue
         const styleopt = meta['styles'][m]
+        const checkFn = getTileCellTimestamp(config, meta, m)
         base_maps[styleopt.display_name] = new L.tileLayer(`${config.tiles_server}/{mapid}/z{z}/{style}/{x},{y}.{format}{cache_str}`, {
             mapid: config.map_id,
             style: m,
@@ -159,20 +193,11 @@ async function loadBaseMap(config, map, boundary, meta) {
             bounds: boundary,
             crsOverride: getCRS(config.max_tile_zoom, styleopt.offset[0], styleopt.offset[1]),
             offset: styleopt.offset,
-            cache_str: data => {
-                let latest_timestamp = 0
-                let one_side_tile_num = Math.pow(2, Math.abs(data.z - config.max_tile_zoom))
-                for (let x = data.x * one_side_tile_num; x < (data.x + 1) * one_side_tile_num; x++) {
-                    for (let y = data.y * one_side_tile_num; y < (data.y + 1) * one_side_tile_num; y++) {
-                        if (!(`${x},${y}` in meta['styles'][m]['tiles'])) continue
-                        const cell_timestamp = B62decode(meta['styles'][m]['tiles'][`${x},${y}`])
-                        if (latest_timestamp < cell_timestamp) {
-                            latest_timestamp = cell_timestamp
-                        }
-                    }
-                }
-                return latest_timestamp > 0 ? `?t=${latest_timestamp}` : ''
-            }
+            cache_str: (coords) => {
+                const t = checkFn(coords)
+                return t > 0 ? `?t=${t}` : ''
+            },
+            checkValid: checkFn
         })
         if (m === config.default_base_map) {
             const center = map.getCenter()
